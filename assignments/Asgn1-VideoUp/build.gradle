@@ -17,6 +17,7 @@ apply plugin: 'eclipse'
 apply plugin: 'idea'
 apply plugin: 'spring-boot'
 apply plugin: 'war'
+apply plugin: 'jetty'
 
 sourceCompatibility = 1.7
 
