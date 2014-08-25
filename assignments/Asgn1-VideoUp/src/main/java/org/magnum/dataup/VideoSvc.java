@@ -17,12 +17,15 @@
  */
 package org.magnum.dataup;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import org.magnum.dataup.model.Video;
 import org.magnum.dataup.model.VideoStatus;
@@ -40,11 +43,6 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
-import retrofit.client.Response;
-import retrofit.http.GET;
-import retrofit.http.Path;
-import retrofit.http.Streaming;
-import retrofit.mime.TypedFile;
 
 @Controller
 public class VideoSvc{
@@ -58,9 +56,26 @@ public class VideoSvc{
 	public static final String VIDEO_DATA_PATH = VIDEO_SVC_PATH + "/{id}/data";
 	
 	private static final AtomicLong currentId = new AtomicLong(0L);
+	
+	private VideoFileManager videoDataMgr;
+	
+	VideoSvc() throws IOException {
+		videoDataMgr = VideoFileManager.get();
+	}
 
+    public void saveSomeVideo(Video v, MultipartFile videoData) throws IOException {
+        videoDataMgr.saveVideoData(v, videoData.getInputStream());
+    }
+    
+    public void serveSomeVideo(Video v, HttpServletResponse response) throws IOException {
+        // Of course, you would need to send some headers, etc. to the
+        // client too!
+        //  ...
+        videoDataMgr.copyVideoData(v, response.getOutputStream());
+   }
+    
 	    private Map<Long,Video> videos = new HashMap<Long, Video>();
-	    private Map<Long, MultipartFile> videosDB= new HashMap<Long, MultipartFile>();
+//	    private Map<Long, MultipartFile> videosDB= new HashMap<Long, MultipartFile>();
 
 	    public Video save(Video entity) {
 	        checkAndSetId(entity);
@@ -104,27 +119,56 @@ public class VideoSvc{
 
 	@RequestMapping(value=VIDEO_DATA_PATH, method=RequestMethod.POST)
 	@ResponseBody
-	public ResponseEntity<String> setVideoData(@PathVariable("id") long id, @RequestParam("data") MultipartFile videoData) {
+	public ResponseEntity<VideoStatus> setVideoData(@PathVariable("id") long id, @RequestParam("data") MultipartFile videoData, HttpServletResponse response) throws
+	ServletException, IOException{
 		System.out.println("id received is " + id);
 		// TODO Auto-generated method stub
 		VideoStatus status = new VideoStatus(VideoState.READY);
 		Video v = videos.get(id);
 		//v.setContentType(videoData);
 		if (v != null) {
-			videosDB.put(id, videoData);
-			return new ResponseEntity<String>(status, HttpStatus.OK);
+			//videosDB.put(id, videoData);
+			
+			//response.setStatus(200);
+			//response.setContentType("application/json");
+			//response.send;
+			
+			//return status;
+			//response.getWriter().
+			System.out.println("saving video data");
+			saveSomeVideo(v, videoData);
+			return new ResponseEntity<VideoStatus>(status, HttpStatus.OK);
+		} else {
+			System.out.println("unable to save video data");
+			return new ResponseEntity<VideoStatus>(HttpStatus.NOT_FOUND);
 		}
-		return new ResponseEntity<String>(HttpStatus.BAD_REQUEST);
 	}
 	
 	
 	@RequestMapping(value=VIDEO_DATA_PATH, method=RequestMethod.GET)
-    public @ResponseBody MultipartFile getVideoData(@PathVariable("id") long id) {
-		if (videosDB.get(id) != null) {
-			MultipartFile videoData = videosDB.get(id);
-			return videoData;
+	@ResponseBody
+    public void getVideoData(@PathVariable("id") long id, HttpServletResponse response) throws ServletException, IOException{
+		System.out.println("id received is " + id);
+		
+		Video v = videos.get(id);
+		if (v != null) {
+			if (videoDataMgr.hasVideoData(v)) {
+				System.out.println("Returning video");
+				response.setStatus(200);
+				serveSomeVideo(v, response);
+				//return new ResponseEntity<MultipartFile>(HttpStatus.OK);
+			}
+			else {
+				System.out.println("videosDB.get(id) is NULL");
+				response.sendError(404);
+				//return new ResponseEntity<MultipartFile>(HttpStatus.NOT_FOUND);
+			}
 		}
-		return null;
+		else {
+			response.sendError(404);
+		}
+		
+		System.out.println("Returning NULL");
 	}
 	
 	/**
